@@ -1,28 +1,36 @@
-import os
-import psycopg
+import sqlite3
 from fastapi import FastAPI
 
 app = FastAPI()
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+DB_FILE = "nvda_calendar.db"
+
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_key TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+init_db()
 
 @app.get("/")
 def root():
-    return {
-        "status": "nvda-backend-running",
-        "database_url_present": DATABASE_URL is not None
-    }
+    return {"status": "nvda-backend-running-sqlite"}
 
 @app.get("/db-test")
 def db_test():
-    if not DATABASE_URL:
-        return {"db": "error", "details": "DATABASE_URL missing"}
-
     try:
-        with psycopg.connect(DATABASE_URL) as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT 1;")
-                result = cur.fetchone()
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1;")
+        result = cursor.fetchone()
+        conn.close()
         return {"db": "connected", "result": result[0]}
     except Exception as e:
         return {"db": "error", "details": str(e)}
