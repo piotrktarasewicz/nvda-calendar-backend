@@ -1,24 +1,23 @@
 # -*- coding: UTF-8 -*-
 
-import os
 import sqlite3
 import secrets
 from datetime import datetime, timedelta, date
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
 DB_FILE = "calendar.db"
 
+# Odmienione dni tygodnia (biernik)
 WEEKDAYS_PL = [
     "poniedziałek",
     "wtorek",
-    "środa",
+    "środę",
     "czwartek",
     "piątek",
-    "sobota",
-    "niedziela"
+    "sobotę",
+    "niedzielę"
 ]
 
 MONTHS_PL = [
@@ -58,23 +57,19 @@ def format_event(title, start_iso, end_iso, offset):
 
     time_text = start_dt.strftime("%H:%M")
 
-    # Dziś / jutro / pojutrze
-    if offset == 0:
-        day_prefix = ""
-    elif offset == 1:
-        day_prefix = ""
-    elif offset == 2:
-        day_prefix = ""
-    else:
+    # Prefiks dnia dla offset >=3
+    if offset >= 3:
         weekday = WEEKDAYS_PL[start_dt.weekday()]
         month = MONTHS_PL[start_dt.month - 1]
-        day_prefix = f"W {weekday}, {start_dt.day} {month}, "
+        prefix = f"W {weekday}, {start_dt.day} {month} "
+    else:
+        prefix = ""
 
-    status = ""
+    # Status trwania
     if start_dt <= now <= end_dt:
-        status = " trwa,"
-
-    return f"{day_prefix}o {time_text},{status} {title}"
+        return f"{prefix}o {time_text} trwa {title}"
+    else:
+        return f"{prefix}o {time_text} {title}"
 
 
 @app.get("/")
@@ -121,12 +116,10 @@ def get_today(user_key: str):
         if start_dt.date() != today:
             continue
 
-        # przyszłe lub trwające
         if start_dt >= now or (start_dt <= now <= end_dt):
             result.append(format_event(title, start_iso, end_iso, 0))
 
     result.sort()
-
     return {"events": result}
 
 
@@ -152,7 +145,6 @@ def get_by_offset(user_key: str, offset: int):
             result.append(format_event(title, start_iso, end_iso, offset))
 
     result.sort()
-
     return {"events": result}
 
 
