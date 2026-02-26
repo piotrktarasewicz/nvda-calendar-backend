@@ -12,6 +12,7 @@ DB_FILE = "nvda_calendar.db"
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -19,6 +20,16 @@ def init_db():
             created_at TEXT NOT NULL
         )
     """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_key TEXT NOT NULL,
+            title TEXT NOT NULL,
+            event_time TEXT NOT NULL
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -79,6 +90,58 @@ def get_user(user_key: str):
         "user_key": row[0],
         "created_at": row[1]
     }
+
+
+# --- ADD TEST EVENTS ---
+@app.post("/add-test-events/{user_key}")
+def add_test_events(user_key: str):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+
+    # sprawdzamy czy user istnieje
+    cursor.execute("SELECT id FROM users WHERE user_key = ?", (user_key,))
+    if not cursor.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="User not found")
+
+    test_events = [
+        ("Spotkanie z zespołem", "2026-03-01T10:00:00"),
+        ("Wizyta u lekarza", "2026-03-02T15:30:00"),
+        ("Koncert w ciemności", "2026-03-05T19:00:00"),
+    ]
+
+    for title, event_time in test_events:
+        cursor.execute(
+            "INSERT INTO events (user_key, title, event_time) VALUES (?, ?, ?)",
+            (user_key, title, event_time)
+        )
+
+    conn.commit()
+    conn.close()
+
+    return {"status": "test events added"}
+
+
+# --- GET EVENTS ---
+@app.get("/events/{user_key}")
+def get_events(user_key: str):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT title, event_time FROM events WHERE user_key = ? ORDER BY event_time",
+        (user_key,)
+    )
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    events = [
+        {"title": row[0], "event_time": row[1]}
+        for row in rows
+    ]
+
+    return {"events": events}
 
 
 # --- DB TEST ---
