@@ -133,9 +133,11 @@ def db_execute(query, params=None, fetch=False):
 
 @app.get("/")
 def root():
-    engine = "postgres" if USE_POSTGRES else "sqlite"
-    return {"status": f"nvda-backend-running-{engine}"}
-
+    return {
+        "status": "debug",
+        "database_url_present": DATABASE_URL is not None,
+        "database_url_value": str(DATABASE_URL)
+    }
 
 @app.post("/register")
 def register():
