@@ -54,7 +54,8 @@ def format_event(title, start_iso, end_iso, offset):
     end_dt = datetime.fromisoformat(end_iso)
     now = datetime.now()
 
-    time_text = start_dt.strftime("%H:%M")
+    start_time_text = start_dt.strftime("%H:%M")
+    end_time_text = end_dt.strftime("%H:%M")
 
     # Prefiks dnia
     if offset == 0:
@@ -68,10 +69,12 @@ def format_event(title, start_iso, end_iso, offset):
         month = MONTHS_PL[start_dt.month - 1]
         prefix = f"W {weekday}, {start_dt.day} {month} "
 
-    if start_dt <= now <= end_dt:
-        return f"{prefix}o {time_text} trwa {title}"
-    else:
-        return f"{prefix}o {time_text} {title}"
+    # Jeśli trwa (tylko sensowne dla dziś)
+    if offset == 0 and start_dt <= now <= end_dt:
+        return f"Dziś trwa {title} do {end_time_text}"
+
+    # Standardowy format
+    return f"{prefix}o {start_time_text} {title}"
 
 
 @app.get("/")
