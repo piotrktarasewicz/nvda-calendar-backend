@@ -5,14 +5,9 @@ import sqlite3
 import secrets
 from datetime import datetime, timedelta, date
 from fastapi import FastAPI
-
-# Postgres
 import psycopg
 
 app = FastAPI()
-
-DATABASE_URL = os.getenv("DATABASE_URL")
-USE_POSTGRES = DATABASE_URL is not None
 
 DB_FILE = "calendar.db"
 
@@ -32,7 +27,21 @@ MONTHS_PL = [
 ]
 
 
-# ---------- INIT DB ----------
+# ---------------------------
+# Dynamic environment handling
+# ---------------------------
+
+def get_database_url():
+    return os.getenv("DATABASE_URL")
+
+
+def use_postgres():
+    return get_database_url() is not None
+
+
+# ---------------------------
+# Database initialization
+# ---------------------------
 
 def init_sqlite():
     with sqlite3.connect(DB_FILE) as conn:
@@ -56,7 +65,7 @@ def init_sqlite():
 
 
 def init_postgres():
-    with psycopg.connect(DATABASE_URL) as conn:
+    with psycopg.connect(get_database_url()) as conn:
         with conn.cursor() as c:
             c.execute("""
                 CREATE TABLE IF NOT EXISTS users (
@@ -76,13 +85,38 @@ def init_postgres():
         conn.commit()
 
 
-if USE_POSTGRES:
-    init_postgres()
-else:
-    init_sqlite()
+@app.on_event("startup")
+def startup():
+    if use_postgres():
+        init_postgres()
+    else:
+        init_sqlite()
 
 
-# ---------- FORMAT ----------
+# ---------------------------
+# DB helper
+# ---------------------------
+
+def db_execute(query_pg, query_sqlite, params=None, fetch=False):
+    if use_postgres():
+        with psycopg.connect(get_database_url()) as conn:
+            with conn.cursor() as c:
+                c.execute(query_pg, params or ())
+                if fetch:
+                    return c.fetchall()
+            conn.commit()
+    else:
+        with sqlite3.connect(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute(query_sqlite, params or ())
+            if fetch:
+                return c.fetchall()
+            conn.commit()
+
+
+# ---------------------------
+# Formatting
+# ---------------------------
 
 def format_event(title, start_iso, end_iso, offset):
     start_dt = datetime.fromisoformat(start_iso)
@@ -109,35 +143,15 @@ def format_event(title, start_iso, end_iso, offset):
     return f"{prefix}o {start_time_text} {title}"
 
 
-# ---------- HELPERS ----------
-
-def db_execute(query, params=None, fetch=False):
-    if USE_POSTGRES:
-        with psycopg.connect(DATABASE_URL) as conn:
-            with conn.cursor() as c:
-                c.execute(query, params or ())
-                if fetch:
-                    return c.fetchall()
-            conn.commit()
-    else:
-        with sqlite3.connect(DB_FILE) as conn:
-            c = conn.cursor()
-            c.execute(query, params or ())
-            if fetch:
-                rows = c.fetchall()
-                return rows
-            conn.commit()
-
-
-# ---------- ROUTES ----------
+# ---------------------------
+# Routes
+# ---------------------------
 
 @app.get("/")
 def root():
-    return {
-        "status": "debug",
-        "database_url_present": DATABASE_URL is not None,
-        "database_url_value": str(DATABASE_URL)
-    }
+    engine = "postgres" if use_postgres() else "sqlite"
+    return {"status": f"nvda-backend-running-{engine}"}
+
 
 @app.post("/register")
 def register():
@@ -145,8 +159,8 @@ def register():
     created_at = datetime.now().isoformat()
 
     db_execute(
-        "INSERT INTO users (user_key, created_at) VALUES (%s, %s)" if USE_POSTGRES
-        else "INSERT INTO users (user_key, created_at) VALUES (?, ?)",
+        "INSERT INTO users (user_key, created_at) VALUES (%s, %s)",
+        "INSERT INTO users (user_key, created_at) VALUES (?, ?)",
         (user_key, created_at)
     )
 
@@ -159,9 +173,8 @@ def get_today(user_key: str):
     today = date.today()
 
     rows = db_execute(
-        "SELECT title, start_time, end_time FROM events WHERE user_key = %s"
-        if USE_POSTGRES
-        else "SELECT title, start_time, end_time FROM events WHERE user_key = ?",
+        "SELECT title, start_time, end_time FROM events WHERE user_key = %s",
+        "SELECT title, start_time, end_time FROM events WHERE user_key = ?",
         (user_key,),
         fetch=True
     )
@@ -187,9 +200,8 @@ def get_by_offset(user_key: str, offset: int):
     target_date = date.today() + timedelta(days=offset)
 
     rows = db_execute(
-        "SELECT title, start_time, end_time FROM events WHERE user_key = %s"
-        if USE_POSTGRES
-        else "SELECT title, start_time, end_time FROM events WHERE user_key = ?",
+        "SELECT title, start_time, end_time FROM events WHERE user_key = %s",
+        "SELECT title, start_time, end_time FROM events WHERE user_key = ?",
         (user_key,),
         fetch=True
     )
@@ -219,9 +231,8 @@ def add_test_events(user_key: str):
 
     for title, start_dt, end_dt in test_events:
         db_execute(
-            "INSERT INTO events (user_key, title, start_time, end_time) VALUES (%s, %s, %s, %s)"
-            if USE_POSTGRES
-            else "INSERT INTO events (user_key, title, start_time, end_time) VALUES (?, ?, ?, ?)",
+            "INSERT INTO events (user_key, title, start_time, end_time) VALUES (%s, %s, %s, %s)",
+            "INSERT INTO events (user_key, title, start_time, end_time) VALUES (?, ?, ?, ?)",
             (user_key, title, start_dt.isoformat(), end_dt.isoformat())
         )
 
