@@ -9,7 +9,6 @@ app = FastAPI()
 
 DB_FILE = "calendar.db"
 
-# Odmienione dni tygodnia (biernik)
 WEEKDAYS_PL = [
     "poniedziałek",
     "wtorek",
@@ -57,15 +56,18 @@ def format_event(title, start_iso, end_iso, offset):
 
     time_text = start_dt.strftime("%H:%M")
 
-    # Prefiks dnia dla offset >=3
-    if offset >= 3:
+    # Prefiks dnia
+    if offset == 0:
+        prefix = "Dziś "
+    elif offset == 1:
+        prefix = "Jutro "
+    elif offset == 2:
+        prefix = "Pojutrze "
+    else:
         weekday = WEEKDAYS_PL[start_dt.weekday()]
         month = MONTHS_PL[start_dt.month - 1]
         prefix = f"W {weekday}, {start_dt.day} {month} "
-    else:
-        prefix = ""
 
-    # Status trwania
     if start_dt <= now <= end_dt:
         return f"{prefix}o {time_text} trwa {title}"
     else:
@@ -153,10 +155,10 @@ def add_test_events(user_key: str):
     now = datetime.now()
 
     test_events = [
-        ("Spotkanie trwające", now - timedelta(minutes=30), now + timedelta(minutes=30)),
-        ("Spotkanie później", now + timedelta(hours=2), now + timedelta(hours=3)),
-        ("Jutro rano", now + timedelta(days=1, hours=1), now + timedelta(days=1, hours=2)),
-        ("Za trzy dni", now + timedelta(days=3, hours=1), now + timedelta(days=3, hours=2)),
+        ("Spotkanie", now - timedelta(minutes=30), now + timedelta(minutes=30)),
+        ("Rozmowa z klientem", now + timedelta(hours=2), now + timedelta(hours=3)),
+        ("Lekarz", now + timedelta(days=1, hours=1), now + timedelta(days=1, hours=2)),
+        ("Planowanie projektu", now + timedelta(days=3, hours=1), now + timedelta(days=3, hours=2)),
     ]
 
     with sqlite3.connect(DB_FILE) as conn:
